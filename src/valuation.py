@@ -50,21 +50,31 @@ def sensitivity(base_revenue, net_cash, shares_cr, growth, fcf_margin, waccs, tg
     return grid
 
 
-def value_company(ann, meta, assumptions, sens=None):
+def build_paths(a, years=5):
+    """Turn the simple settings into yearly growth and cash-margin lists."""
+    growth = [a["start_growth"] - a["growth_fade"] * i for i in range(years)]
+    margin = [a["start_margin"] + (a["end_margin"] - a["start_margin"]) * i / (years - 1)
+              for i in range(years)]
+    return growth, margin
+
+
+def value_company(ann, meta, a, sens=None):
     """Run the DCF (and optional grid) for one cleaned company.
 
-    assumptions: the `dcf` block of config.yaml. sens: the `sensitivity` block.
+    a: the `dcf` block of config.yaml. sens: the `sensitivity` block.
     """
+    growth, margin = build_paths(a)
     base = ann["sales"].iloc[-1]
-    nc = net_cash_of(ann, assumptions.get("include_investments", False))
+    nc = net_cash_of(ann, a.get("include_investments", False))
     shares = meta["shares_cr"]
-    out = dcf(base, nc, shares, assumptions["revenue_growth"], assumptions["fcf_margin"],
-              assumptions["wacc"], assumptions["terminal_growth"])
+    out = dcf(base, nc, shares, growth, margin, a["expected_return"], a["long_term_growth"])
+    out["growth"], out["margin"] = growth, margin
     out["base_revenue"], out["shares_cr"] = base, shares
     out["market_price"] = meta.get("Current Price")
     out["upside"] = out["value_per_share"] / out["market_price"] - 1 if out["market_price"] else np.nan
     if sens:
-        out["sensitivity"] = sensitivity(base, nc, shares, assumptions["revenue_growth"],
-                                         assumptions["fcf_margin"], sens["wacc"],
-                                         sens["terminal_growth"])
+        grid = sensitivity(base, nc, shares, growth, margin,
+                           sens["expected_return"], sens["long_term_growth"])
+        grid.index.name, grid.columns.name = "Expected return", "Long-term growth"
+        out["sensitivity"] = grid
     return out

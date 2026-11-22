@@ -11,17 +11,18 @@ companies:
   CAMS: Cams_Services.xlsx
   PB Fintech: PB_Fintech.xlsx
 
-dcf:
-  revenue_growth: [0.16, 0.15, 0.14, 0.12, 0.10]   # years 1-5
-  fcf_margin:     [0.04, 0.07, 0.10, 0.13, 0.15]   # FCF / revenue, years 1-5
-  wacc: 0.135
-  terminal_growth: 0.05
-  include_investments: false   # false: net cash = cash & bank - borrowings
-                               # true : also add balance-sheet investments
+dcf:                           # plain-English valuation settings
+  start_growth: 0.16           # revenue growth in year 1
+  growth_fade: 0.015           # growth falls by this much each year (16% -> 10% by year 5)
+  start_margin: 0.04           # cash kept from each Rs 100 of sales in year 1
+  end_margin: 0.15             # ... and in year 5 (rises in a straight line)
+  expected_return: 0.135       # return investors want; used to discount future cash (WACC)
+  long_term_growth: 0.05       # growth after year 5
+  include_investments: false   # false: net cash = cash - borrowings; true: also add investments
 
-sensitivity:                   # grid used by the standalone run; the dashboard centres its grid on the sliders
-  wacc: [0.12, 0.135, 0.15]
-  terminal_growth: [0.04, 0.05, 0.06]
+sensitivity:                   # grid shown in the standalone run
+  expected_return: [0.12, 0.135, 0.15]
+  long_term_growth: [0.04, 0.05, 0.06]
 
 checks:
   reconcile_tolerance: 0.01        # P&L / balance-sheet reconciliation (fraction)

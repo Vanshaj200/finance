@@ -36,3 +36,18 @@ def format_comps(comps):
     keep = ["company", "price", "market_cap", "revenue", "rev_growth", "rev_cagr_3y",
             "rev_cagr_5y", "net_margin", "roe", "pe", "pb", "comparable"]
     return d[keep]
+
+
+def peer_value(snapshot, meta, target, shares_cr):
+    """What Paytm would be worth per share at its peers' price-to-sales (P/S).
+
+    P/S = market cap / sales. Uses only comparable peers (not the target, not
+    companies flagged as standalone). Returns low / median / high Rs per share.
+    """
+    t = snapshot.set_index("company")
+    peers = [c for c in t.index if c != target and not meta[c]["standalone_suspect"]]
+    ps = t.loc[peers, "ps"].dropna()
+    revenue = t.at[target, "revenue"]
+    to_price = lambda multiple: multiple * revenue / shares_cr
+    return {"peers": ps.to_dict(), "target_ps": t.at[target, "ps"],
+            "low": to_price(ps.min()), "median": to_price(ps.median()), "high": to_price(ps.max())}

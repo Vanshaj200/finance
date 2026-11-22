@@ -1,53 +1,56 @@
 # Equity Valuation & Analytics Engine: Paytm vs fintech peers
 
-Values Paytm (One 97 Communications) against Angel One, CAMS and PB Fintech from
-Screener.in exports, and serves an interactive Streamlit dashboard.
+Compares Paytm (One 97 Communications) with Angel One, CAMS and PB Fintech using
+Screener.in exports, estimates what Paytm is worth two ways, and shows everything in an
+interactive Streamlit dashboard.
 
 ## Setup
 
 ```powershell
 pip install -r requirements.txt
-python -m src.refresh      # run the pipeline, print DCF + comps, write data/processed/
+python -m src.refresh      # run the pipeline, print results, write data/processed/
 streamlit run app.py       # dashboard
 ```
 
 ## Data
 
-Four Screener.in Excel exports live in `data/raw/` (`One_97`, `Angel_One`,
-`Cams_Services`, `PB_Fintech`). The visible P&L / Balance Sheet / Cash Flow
-tabs are formula views, so `ingest.py` reads the hidden **Data Sheet** tab.
-Figures are consolidated, Rs Cr, FY2017-FY2026, plus a quarterly block.
+Four Screener.in Excel exports live in `data/raw/`. The visible P&L / Balance Sheet / Cash
+Flow tabs are blank formula views, so `ingest.py` reads the hidden **Data Sheet** tab.
+Figures are consolidated, in Rs Crore, FY2017 to FY2026, plus a quarterly block.
 
-To update: replace a file in `data/raw/` with a newer export (same filename)
-and press **Refresh data** in the sidebar. It is a re-ingest of a downloaded
-export, not live scraping.
+To update: replace a file in `data/raw/` with a newer export (same filename) and press
+**Refresh data** in the sidebar. This re-reads a downloaded export; it is not live scraping.
 
 ## Pipeline (`src/`)
 
 | Module | Job |
 |---|---|
-| `ingest.py` | Parse each Data Sheet into tidy annual and quarterly tables |
-| `clean.py` | Fill blanks, rescale share counts across face-value splits, run due-diligence checks |
-| `analytics.py` | Growth, 3y/5y CAGR, net margin, ROE, EPS, P/E, P/B |
-| `valuation.py` | 5-year DCF and WACC x terminal-growth grid |
-| `comps.py` | Peer table and peer median |
-| `refresh.py` | Orchestrates everything; `python -m src.refresh` prints results |
+| `ingest.py` | Read each Data Sheet into clean tables |
+| `clean.py` | Fill gaps, fix share counts after stock splits, run data checks |
+| `analytics.py` | Growth, 3 and 5 year growth, profit margin, P/E, price-to-sales |
+| `valuation.py` | Simple 5-year cash-flow valuation (DCF) with a what-if grid |
+| `comps.py` | Peer table, and Paytm's value at its peers' price-to-sales |
+| `refresh.py` | Runs everything; `python -m src.refresh` prints the results |
 
-## Due-diligence checks
+## Data checks
 
-Logged per company (PASS / WARN / FAIL) and shown in the dashboard's *Data checks* tab:
-missing core fields, imputations, face-value splits, share-count jumps without a split,
-P&L to PBT reconciliation, PBT - tax = net profit, balance-sheet balance, quarters
-summing to annual, market cap vs price x shares, and a standalone-vs-consolidated
-revenue test. **PB Fintech fails the last one** (other income exceeds sales, market cap
-is ~230x sales, latest quarter jumps ~7x): its annual revenue is on a holding-company
-basis, so it is shown but excluded from the peer median.
+Each check is logged as PASS / WARN / FAIL and shown in the dashboard's *Data checks* tab:
+missing values, stock splits, sudden share-count jumps, profit statement adding up,
+balance sheet balancing, quarters adding up to the year, and a test for whether a
+company's revenue is the whole group or just the parent company. **PB Fintech fails the
+last one** (its other income is bigger than its sales), so it is shown but left out of the
+peer median.
 
-## DCF
+## Valuation, in plain words
 
-Assumptions live in `config.yaml` (defaults: growth 16/15/14/12/10%, FCF margin
-4/7/10/13/15%, WACC 13.5%, terminal growth 5%). Net cash = cash & bank - borrowings
-(set `include_investments: true` to add balance-sheet investments). Default output is
-about Rs 272/share against a Rs 1,675 market price. Most of that value is terminal value
-because Paytm's historical free cash flow is near zero. The dashboard sliders update the
-valuation live, and **Save to config.yaml** writes them back.
+1. **Cash-flow model (DCF).** Forecast 5 years of the cash Paytm keeps from its sales, add a
+   long-run value for the years after, and bring it all back to today's money using the
+   return investors expect. Add cash minus debt, divide by the number of shares.
+   Settings are in `config.yaml` and as sliders in the dashboard: year-1 growth (fades by
+   1.5 points a year), cash kept per Rs 100 of sales by year 5, expected return (13.5%) and
+   growth after year 5 (5%). Default result: about Rs 267 per share.
+2. **Peer check.** What Paytm would be worth at the price-to-sales of Angel One and CAMS:
+   about Rs 498 to Rs 1,099 per share (median Rs 798).
+
+The market price is Rs 1,675. Both views come out well below it. The margins are
+assumptions, not forecasts, and most of the cash-flow value comes from the years after year 5.

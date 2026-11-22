@@ -73,12 +73,12 @@ def clean_company(name, parsed, cfg):
     exp = ann[[c for c in EXPENSE_LINES if c in ann]].fillna(0).sum(axis=1)
     implied_pbt = ann["sales"] + ann["other_income"] - exp - ann["depreciation"] - ann["interest"]
     err = (implied_pbt - ann["pbt"]).abs() / ann["sales"].abs().clip(lower=1)
-    add("P&L reconciles to PBT", "PASS" if (err <= tol).all() else "FAIL",
-        "Sales + other income - costs = PBT in every year" if (err <= tol).all()
+    add("Profit statement adds up", "PASS" if (err <= tol).all() else "FAIL",
+        "Sales + other income - costs = profit before tax in every year" if (err <= tol).all()
         else f"Gap >{tol:.0%} of sales in FY{', FY'.join(map(str, err[err > tol].index))}")
 
     err = ((ann["pbt"] - ann["tax"]) - ann["net_profit"]).abs() / ann["sales"].abs().clip(lower=1)
-    add("PBT - tax = net profit", "PASS" if (err <= tol).all() else "WARN",
+    add("Profit before tax - tax = net profit", "PASS" if (err <= tol).all() else "WARN",
         "Ties out" if (err <= tol).all()
         else f"Gap in FY{', FY'.join(map(str, err[err > tol].index))} (minorities / exceptionals)")
 

@@ -136,7 +136,7 @@ st.markdown(f"""<div class="hero"><div class="eyebrow">Equity valuation &amp; an
 peer standing and what a forward DCF can justify.</p><div class="chips">{chips}</div></div>""",
             unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4 = st.tabs(["Turnaround", "Peer benchmarking", "DCF valuation", "Data checks"])
+tab1, tab2, tab3, tab4 = st.tabs(["Turnaround", "Peer benchmarking", "Valuation", "Data checks"])
 
 # ---- tab 1: turnaround ----------------------------------------------------------------
 with tab1:
@@ -179,80 +179,84 @@ with tab2:
     C = R["comps"]
     P = C[C["company"].isin(R["annual"])].copy()
     for c in flagged:
-        st.warning(f"**{c}**: revenue looks standalone / holding-company ({'; '.join(R['meta'][c]['flags'])}). "
-                   "Shown but excluded from the peer median.")
+        st.warning(f"**{c}**: its revenue looks like the parent company only ({'; '.join(R['meta'][c]['flags'])}). "
+                   "It is shown but left out of the peer median.")
     med = C[C["company"] == "Peer median"].iloc[0]
-    kpis([("Peer median rev CAGR 3y", pct(med["rev_cagr_3y"]), "comparable peers, ex-Paytm", POS),
-          ("Peer median net margin", pct(med["net_margin"]), f"{target}: {pct(P.set_index('company').at[target, 'net_margin'])}", ACCENT),
-          ("Peer median ROE", pct(med["roe"]), f"{target}: {pct(P.set_index('company').at[target, 'roe'])}", "#fbbf24"),
-          ("Peer median P/E", f"{med['pe']:,.0f}x", f"{target}: {P.set_index('company').at[target, 'pe']:,.0f}x (n.m.)", NEG)])
+    me = P.set_index("company").loc[target]
+    kpis([("Revenue growth (3-yr avg)", pct(me["rev_cagr_3y"]), f"peer median {pct(med['rev_cagr_3y'])}", POS),
+          ("Net margin", pct(me["net_margin"]), f"peer median {pct(med['net_margin'])}", ACCENT),
+          ("P/E", f"{me['pe']:,.0f}x", f"peer median {med['pe']:,.0f}x", NEG),
+          ("Price-to-sales", f"{me['ps']:.1f}x", f"peer median {med['ps']:.1f}x", "#fbbf24")])
     show = pd.concat([P, C[C["company"] == "Peer median"]])[
-        ["company", "price", "market_cap", "revenue", "rev_growth", "rev_cagr_3y", "rev_cagr_5y",
-         "net_margin", "roe", "pe", "pb", "comparable"]].copy()
+        ["company", "price", "market_cap", "revenue", "rev_growth", "rev_cagr_3y", "net_margin", "pe", "ps",
+         "comparable"]].copy()
     for c in ["price", "market_cap", "revenue"]:
         show[c] = show[c].map(lambda v: "-" if pd.isna(v) else f"{v:,.0f}")
-    show["comparable"] = show["comparable"].map({True: "Yes", False: "No: standalone?"})
+    show["comparable"] = show["comparable"].map({True: "Yes", False: "No"})
     st.dataframe(show, hide_index=True, width="stretch", column_config={
         "company": "Company", "price": st.column_config.TextColumn("Price (Rs)"),
-        "market_cap": st.column_config.TextColumn("Mkt cap (Rs Cr)"),
+        "market_cap": st.column_config.TextColumn("Market cap (Rs Cr)"),
         "revenue": st.column_config.TextColumn("Revenue (Rs Cr)"),
-        "rev_growth": st.column_config.NumberColumn("Rev growth", format="percent"),
-        "rev_cagr_3y": st.column_config.NumberColumn("CAGR 3y", format="percent"),
-        "rev_cagr_5y": st.column_config.NumberColumn("CAGR 5y", format="percent"),
+        "rev_growth": st.column_config.NumberColumn("Growth last year", format="percent"),
+        "rev_cagr_3y": st.column_config.NumberColumn("Growth, 3-yr avg", format="percent"),
         "net_margin": st.column_config.ProgressColumn("Net margin", format="percent", min_value=0, max_value=0.4),
-        "roe": st.column_config.ProgressColumn("ROE", format="percent", min_value=0, max_value=0.4),
         "pe": st.column_config.NumberColumn("P/E", format="%.1fx"),
-        "pb": st.column_config.NumberColumn("P/B", format="%.1fx"), "comparable": "Comparable"})
-    st.markdown('<div class="note">P/E uses latest-FY net profit. Values above 200x are not meaningful and are '
-                'left out of the median.</div>', unsafe_allow_html=True)
+        "ps": st.column_config.NumberColumn("Price-to-sales", format="%.1fx"),
+        "comparable": "Fair to compare?"})
+    st.markdown('<div class="note"><b>Net margin</b> = profit kept from each Rs 100 of sales. '
+                '<b>P/E</b> = share price relative to profit per share (how many years of profit you pay for). '
+                '<b>Price-to-sales</b> = market value relative to yearly sales. '
+                'P/E above 200x is not meaningful and is left out of the median.</div>', unsafe_allow_html=True)
     section("Head to head")
-    metrics = [("rev_cagr_3y", "Revenue CAGR, 3 years", True), ("net_margin", "Net margin", True),
-               ("roe", "Return on equity", True), ("pe", "P/E (x)", False)]
+    metrics = [("rev_cagr_3y", "Revenue growth, 3-year average", "pct"), ("net_margin", "Net margin", "pct"),
+               ("pe", "P/E (x)", "x"), ("ps", "Price-to-sales (x)", "x")]
     cols = st.columns(2)
-    for i, (m, title, is_pct) in enumerate(metrics):
+    for i, (m, title, kind) in enumerate(metrics):
         d = P.sort_values(m, ascending=True, na_position="first")
         vals = d[m]
         fig = go.Figure(go.Bar(
             y=d["company"], x=vals.clip(upper=120) if m == "pe" else vals, orientation="h",
             marker=dict(color=[COLORS.get(c, MUTED) for c in d["company"]], cornerradius=6),
-            text=[("n/a" if pd.isna(v) else f"{v:.1%}" if is_pct else f"{v:,.0f}x") for v in vals],
+            text=[("n/a" if pd.isna(v) else f"{v:.1%}" if kind == "pct" else f"{v:,.0f}x" if m == "pe" else f"{v:.1f}x")
+                  for v in vals],
             textposition="outside", textfont=dict(color=INK), cliponaxis=False,
             hovertemplate="%{y}: %{text}<extra></extra>"))
+        fig.update_xaxes(showgrid=True, gridcolor=GRID)
+        if kind == "pct":
+            lo = min(0, float(vals.min())) * 1.8
+            fig.update_xaxes(tickformat=".0%", range=[lo, float(vals.max()) * 1.25])
         if m == "pe":
             fig.update_xaxes(range=[0, 150])
             title += "  -  axis capped at 120x"
-        fig.update_xaxes(showgrid=True, gridcolor=GRID)
-        if is_pct:
-            lo = min(0, float(vals.min())) * 1.8
-            fig.update_xaxes(tickformat=".0%", range=[lo, float(vals.max()) * 1.25])
         fig.update_yaxes(showgrid=False, zeroline=False, ticklabelstandoff=10)
         cols[i % 2].plotly_chart(style(fig, title, height=290), width="stretch")
 
-# ---- tab 3: DCF ---------------------------------------------------------------------------
+# ---- tab 3: valuation ---------------------------------------------------------------------
 with tab3:
     base = cfg["dcf"]
+    KEYS = {"sg": base["start_growth"] * 100, "em": base["end_margin"] * 100,
+            "er": base["expected_return"] * 100, "lg": base["long_term_growth"] * 100,
+            "inv": base["include_investments"]}
     if "dcf_init" not in st.session_state:
         st.session_state["dcf_init"] = True
-        st.session_state["wacc"] = base["wacc"] * 100
-        st.session_state["tg"] = base["terminal_growth"] * 100
-        st.session_state["inv"] = base["include_investments"]
-        for i in range(5):
-            st.session_state[f"g{i}"] = base["revenue_growth"][i] * 100
-            st.session_state[f"m{i}"] = base["fcf_margin"][i] * 100
+        for k, v in KEYS.items():
+            st.session_state[k] = v
     left, right = st.columns([1, 2.2])
     with left:
-        section("Assumptions")
-        wacc = st.slider("WACC (%)", 8.0, 20.0, step=0.1, key="wacc")
-        tg = st.slider("Terminal growth (%)", 2.0, 8.0, step=0.1, key="tg")
-        inv = st.checkbox("Add balance-sheet investments to net cash", key="inv")
-        with st.expander("Yearly revenue growth and FCF margin"):
-            g = [st.slider(f"Year {i + 1} revenue growth (%)", 0.0, 40.0, step=0.5, key=f"g{i}") for i in range(5)]
-            mg = [st.slider(f"Year {i + 1} FCF margin (%)", 0.0, 30.0, step=0.5, key=f"m{i}") for i in range(5)]
+        section("Your assumptions")
+        sg = st.slider("Revenue growth in year 1 (%)", 5.0, 30.0, step=0.5, key="sg",
+                       help="Growth then falls by 1.5 points every year.")
+        em = st.slider("Cash kept from each Rs 100 of sales by year 5 (Rs)", 5.0, 30.0, step=0.5, key="em",
+                       help="Starts at Rs 4 in year 1 and rises in a straight line.")
+        er = st.slider("Return investors expect (%)", 8.0, 20.0, step=0.1, key="er",
+                       help="Future cash is worth less today, so it is discounted at this rate.")
+        lg = st.slider("Growth after year 5 (%)", 2.0, 8.0, step=0.1, key="lg",
+                       help="Long-run growth forever after the 5 forecast years.")
+        inv = st.checkbox("Also count the company's investments as spare cash", key="inv")
         b1, b2 = st.columns(2)
         if b1.button("Save to config", width="stretch"):
-            cfg["dcf"] = {"revenue_growth": [round(x / 100, 4) for x in g],
-                          "fcf_margin": [round(x / 100, 4) for x in mg],
-                          "wacc": round(wacc / 100, 4), "terminal_growth": round(tg / 100, 4),
+            cfg["dcf"] = {**base, "start_growth": round(sg / 100, 4), "end_margin": round(em / 100, 4),
+                          "expected_return": round(er / 100, 4), "long_term_growth": round(lg / 100, 4),
                           "include_investments": bool(inv)}
             refresh.save_config(cfg)
             st.cache_data.clear()
@@ -261,55 +265,59 @@ with tab3:
             st.session_state.pop("dcf_init", None)
             st.rerun()
 
-    if wacc <= tg:
-        right.error("WACC must be above terminal growth.")
+    if er <= lg:
+        right.error("Expected return must be higher than long-term growth.")
     else:
-        a = {"revenue_growth": [x / 100 for x in g], "fcf_margin": [x / 100 for x in mg],
-             "wacc": wacc / 100, "terminal_growth": tg / 100, "include_investments": inv}
-        sens = {"wacc": [w / 100 for w in (wacc - 1.5, wacc, wacc + 1.5)],
-                "terminal_growth": [t / 100 for t in (tg - 1, tg, tg + 1)]}
+        a = {**base, "start_growth": sg / 100, "end_margin": em / 100, "expected_return": er / 100,
+             "long_term_growth": lg / 100, "include_investments": inv}
+        sens = {"expected_return": [x / 100 for x in (er - 1.5, er, er + 1.5)],
+                "long_term_growth": [x / 100 for x in (lg - 1, lg, lg + 1)]}
         d = valuation.value_company(ann, R["meta"][target], a, sens)
+        pv = R["peer_value"]
         with right:
-            tv_share = d["pv_terminal"] / d["enterprise_value"]
-            kpis([("DCF value / share", f"Rs {d['value_per_share']:,.0f}", f"{d['upside']:+.0%} vs market", ACCENT),
-                  ("Market price", f"Rs {d['market_price']:,.0f}", "latest close in export", MUTED),
-                  ("Enterprise value", f"Rs {d['enterprise_value']:,.0f} Cr", f"equity Rs {d['equity_value']:,.0f} Cr", POS),
-                  ("Terminal value share", f"{tv_share:.0%}", "of enterprise value", "#fbbf24")])
-            fig = go.Figure(go.Waterfall(
-                x=["PV of FCF (5y)", "PV of terminal value", "Enterprise value", "Net cash", "Equity value"],
-                y=[d["pv_fcf"], d["pv_terminal"], 0, d["net_cash"], 0],
-                measure=["relative", "relative", "total", "relative", "total"],
-                connector=dict(line=dict(color=GRID)),
-                increasing=dict(marker=dict(color=POS)), totals=dict(marker=dict(color=ACCENT)),
-                text=[f"{v:,.0f}" for v in (d["pv_fcf"], d["pv_terminal"], d["enterprise_value"],
-                                            d["net_cash"], d["equity_value"])],
-                textposition="outside", textfont=dict(color=INK),
-                hovertemplate="%{x}: Rs %{y:,.0f} Cr<extra></extra>"))
-            st.plotly_chart(style(fig, "Equity bridge (Rs Cr)", height=320), width="stretch")
-            c1, c2 = st.columns([1, 1.4])
-            fig = go.Figure(go.Bar(x=["DCF value", "Market price"], y=[d["value_per_share"], d["market_price"]],
-                                   marker=dict(color=[ACCENT, MUTED], cornerradius=8),
-                                   text=[f"Rs {d['value_per_share']:,.0f}", f"Rs {d['market_price']:,.0f}"],
-                                   textposition="outside", textfont=dict(color=INK), cliponaxis=False,
-                                   hovertemplate="%{x}: %{text}<extra></extra>"))
-            c1.plotly_chart(style(fig, "Value per share vs market (Rs)", height=330), width="stretch")
+            kpis([("Value from cash-flow model", f"Rs {d['value_per_share']:,.0f}", "per share (DCF)", ACCENT),
+                  ("Value at peer price-to-sales", f"Rs {pv['median']:,.0f}", f"range Rs {pv['low']:,.0f} to {pv['high']:,.0f}", POS),
+                  ("Market price", f"Rs {d['market_price']:,.0f}", f"DCF is {abs(d['upside']):.0%} {'below' if d['upside'] < 0 else 'above'} it", MUTED)])
+            names = ["Cash-flow model (DCF)", "Peers, low", "Peers, median", "Peers, high", "Market price"]
+            vals = [d["value_per_share"], pv["low"], pv["median"], pv["high"], d["market_price"]]
+            fig = go.Figure(go.Bar(
+                y=names, x=vals, orientation="h",
+                marker=dict(color=[ACCENT, POS, POS, POS, MUTED], cornerradius=6),
+                text=[f"Rs {v:,.0f}" for v in vals], textposition="outside", textfont=dict(color=INK),
+                cliponaxis=False, hovertemplate="%{y}: %{text}<extra></extra>"))
+            fig.update_yaxes(autorange="reversed", showgrid=False, zeroline=False, ticklabelstandoff=10)
+            fig.update_xaxes(range=[0, max(vals) * 1.2])
+            st.plotly_chart(style(fig, "Value per share: three ways to look at it (Rs)", height=300), width="stretch")
             grid = d["sensitivity"]
             fig = go.Figure(go.Heatmap(
                 z=grid.values, x=list(grid.columns), y=list(grid.index),
                 colorscale=[[0, "#16315a"], [1, "#5eead4"]], xgap=3, ygap=3,
                 text=np.round(grid.values, 0), texttemplate="Rs %{text:.0f}", showscale=False,
                 textfont=dict(color="#0a0f1e", size=13),
-                hovertemplate="WACC %{y}, growth %{x}: Rs %{z:.0f}<extra></extra>"))
-            fig.update_xaxes(title="Terminal growth", type="category")
-            fig.update_yaxes(title="WACC", autorange="reversed", type="category")
-            c2.plotly_chart(style(fig, "Sensitivity: value per share", height=330), width="stretch")
-            with st.expander("Projection table"):
-                p = d["projection"].round(1)
+                hovertemplate="Expected return %{y}, long-term growth %{x}: Rs %{z:.0f}<extra></extra>"))
+            fig.update_xaxes(title="Growth after year 5", type="category")
+            fig.update_yaxes(title="Expected return", autorange="reversed", type="category")
+            st.plotly_chart(style(fig, "What if the two big assumptions change? (value per share)", height=300),
+                            width="stretch")
+            with st.expander("Year-by-year numbers"):
+                p = d["projection"].copy()
                 p.insert(0, "FY", [fy1 + t for t in p["year"]])
-                st.dataframe(p.drop(columns="year"), hide_index=True, width="stretch")
-    st.markdown('<div class="note">Illustrative model. FCF margins are assumptions, not guidance; Paytm\'s '
-                'historical free cash flow is near zero, so most of the value sits in the terminal value.</div>',
-                unsafe_allow_html=True)
+                p["growth"] = d["growth"]
+                p["cash_margin"] = d["margin"]
+                p = p[["FY", "growth", "revenue", "cash_margin", "fcf", "pv_fcf"]]
+                st.dataframe(p, hide_index=True, width="stretch", column_config={
+                    "growth": st.column_config.NumberColumn("Revenue growth", format="percent"),
+                    "revenue": st.column_config.NumberColumn("Revenue (Rs Cr)", format="%.0f"),
+                    "cash_margin": st.column_config.NumberColumn("Cash kept", format="percent"),
+                    "fcf": st.column_config.NumberColumn("Free cash (Rs Cr)", format="%.0f"),
+                    "pv_fcf": st.column_config.NumberColumn("Worth today (Rs Cr)", format="%.0f")})
+                st.write(f"Cash and bank minus borrowings: Rs {d['net_cash']:,.0f} Cr is added on top. "
+                         f"Divided by {d['shares_cr']:.1f} Cr shares.")
+    st.markdown('<div class="note">How to read this: the <b>cash-flow model</b> adds up the cash Paytm could '
+                'generate over 5 years plus a long-run value after that, brought back to today at the return investors '
+                'expect. The <b>peer view</b> asks what Paytm would be worth if it traded at the same price-to-sales '
+                'as Angel One and CAMS. Both are rough: the margins are assumptions, not forecasts, and the peers earn '
+                'far higher profits than Paytm today.</div>', unsafe_allow_html=True)
 
 # ---- tab 4: data checks -------------------------------------------------------------------
 with tab4:

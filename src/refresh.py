@@ -40,7 +40,8 @@ def run_pipeline(cfg=None, save=True):
     target = cfg["target"]
     peers = comps.build_comps(snapshot, meta, target)
     dcf = valuation.value_company(annual[target], meta[target], cfg["dcf"], cfg["sensitivity"])
-    result = {"config": cfg, "annual": annual, "quarterly": quarterly, "meta": meta,
+    pv = comps.peer_value(snapshot, meta, target, dcf["shares_cr"])
+    result = {"config": cfg, "peer_value": pv, "annual": annual, "quarterly": quarterly, "meta": meta,
               "checks": checks, "yearly": yearly, "snapshot": snapshot,
               "comps": peers, "dcf": dcf}
     if save:
@@ -75,7 +76,10 @@ def main():
     print(f"Equity value     : Rs {d['equity_value']:,.0f} Cr")
     print(f"Value per share  : Rs {d['value_per_share']:,.0f}  (market Rs {d['market_price']:,.0f}, "
           f"{d['upside']:+.0%})")
-    print("\nSensitivity (value/share, Rs):")
+    pv = r["peer_value"]
+    print(f"\nAt peers' price-to-sales (Paytm now {pv['target_ps']:.1f}x): "
+          f"Rs {pv['low']:,.0f} to Rs {pv['high']:,.0f} per share, median Rs {pv['median']:,.0f}")
+    print("\nValue per share (Rs) if expected return and long-term growth change:")
     print(d["sensitivity"].round(0).to_string())
     print("\n=== Peer comps ===")
     print(comps.format_comps(r["comps"]).to_string(index=False))
