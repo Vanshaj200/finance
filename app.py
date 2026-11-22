@@ -171,7 +171,7 @@ with tab1:
                                hovertemplate="FY%{x}: %{y:.0f}%<extra></extra>"))
     fig.update_xaxes(type="category")
     fig.update_yaxes(range=[-200, 20], ticksuffix="%")
-    st.plotly_chart(style(fig, "Net margin (%)  -  losses were multiples of revenue before FY2024", height=300),
+    st.plotly_chart(style(fig, "Net margin (%)  -  from -141% of revenue in FY2017 to +1.2% in FY2026", height=300),
                     width="stretch")
 
 # ---- tab 2: peers -----------------------------------------------------------------------
